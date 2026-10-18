@@ -254,8 +254,11 @@ def main():
         print(f"[qnn {a.size}] shard {k + 1}/{num_shards}: layers [{shard.start}, {shard.end}), "
               f"calibrating on {len(data)} seqs -> {stem}.pte")
         try:
-            build_executorch_binary(model=shard, qnn_config=qcfg, file_name=str(stem),
-                                    dataset=data, custom_quantizer=quantizer)
+            # Grad must already be off at capture: HF's rotary embedding toggles it internally,
+            # which otherwise lands in the graph as WrapWithSetGradEnabled and breaks QNN passes.
+            with torch.no_grad():
+                build_executorch_binary(model=shard, qnn_config=qcfg, file_name=str(stem),
+                                        dataset=data, custom_quantizer=quantizer)
         except SystemExit as e:  # build_executorch_binary calls sys.exit(0) when compile_only
             if e.code not in (0, None):
                 raise

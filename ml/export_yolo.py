@@ -62,9 +62,23 @@ def load_yolo(weights: str):
 
 def export_mode_model(yolo) -> torch.nn.Module:
     """The DetectionModel with the head in export mode: returns decoded [1, 84, N]."""
+    import ultralytics.nn.modules.head as head_mod
     from ultralytics.nn.modules import Detect
 
     m = yolo.model.float().eval()
+
+    # make_anchors gets strides from a buffer, so torch.full(..., stride) would take a traced
+    # value; QNN's op_full needs a Python number. Strides are fixed per model (8/16/32), so read
+    # them here, outside tracing, and hand make_anchors those constants.
+    fixed = [float(s) for mod in m.modules() if isinstance(mod, Detect) for s in mod.stride.tolist()]
+    orig = getattr(head_mod.make_anchors, "_orig", head_mod.make_anchors)
+
+    def make_anchors(feats, strides, offset=0.5):
+        return orig(feats, fixed, offset)
+
+    make_anchors._orig = orig
+    head_mod.make_anchors = make_anchors
+
     m = m.fuse() if hasattr(m, "fuse") else m
     for mod in m.modules():
         if isinstance(mod, Detect):
@@ -164,8 +178,9 @@ def qnn_export(model: torch.nn.Module, imgsz: int, soc_model: str, quant: str,
     )
     data = [(t,) for t in calib_images(imgsz, calib_dir, n_calib)]
     try:
-        build_executorch_binary(model=model, qnn_config=qcfg, file_name=str(out_stem),
-                                dataset=data, custom_quantizer=quantizer)
+        with torch.no_grad():
+            build_executorch_binary(model=model, qnn_config=qcfg, file_name=str(out_stem),
+                                    dataset=data, custom_quantizer=quantizer)
     except SystemExit as e:  # build_executorch_binary exits(0) after compile_only
         if e.code not in (0, None):
             raise

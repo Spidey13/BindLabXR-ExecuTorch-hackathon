@@ -73,6 +73,28 @@ python export_yolo.py --backend qnn --imgsz 320 --calib_dir /path/to/lab/photos
 python verify.py                                        # records QNN files as "skipped" (device-only)
 ```
 
+### What we built (InstaBox, Debian 13 x86_64, ExecuTorch v1.5.1 + QAIRT 2.51.0.260929)
+
+| Built | Result |
+|---|---|
+| `esm2_{8M,35M,150M,650M}_qnn.pte` (SM8750, 16a8w) | OK: 10 MB / 40 MB / 166 MB / 667 MB |
+| `yolo11n` QNN (SXR2230P and SM8750, 16a8w and 8a8w) | **Fails**: QNN rejects `view_copy`/`matmul` in the YOLO11 graph (`0xc26`). Use `yolo11n_xnnpack.pte` (CPU) |
+| `esm2_3B` QNN | Skipped: the 8 GiB host can't load it |
+| `android/libs/executorch-qnn.aar` | arm64 AAR with `libexecutorch.so` + `libqnn_executorch_backend.so` |
+| `artifacts/runtime/{s25,xr}/` | `qnn_executor_runner`, backend `.so` and QAIRT libs (V79 for S25, V69 for XR); S25 also has `qnn_llama_runner` |
+
+All of these are gitignored, so share them out of band. The AAR doesn't include the QAIRT libs: an app using it
+must ship `libQnnHtp.so`, `libQnnSystem.so`, `libQnnHtpPrepare.so`, `libQnnHtpV79Stub.so` and `libQnnHtpV79Skel.so`
+(V69 versions for the XR) in `jniLibs/arm64-v8a`, and set `ADSP_LIBRARY_PATH` to its native lib dir before
+loading a model. Debian also needs `apt install libc++1` for the QAIRT host libraries.
+
+Quick on-device check (S25):
+
+```bash
+adb push artifacts/runtime/s25/* artifacts/esm2_8M_qnn.pte /data/local/tmp/et_qnn/
+adb shell "cd /data/local/tmp/et_qnn && LD_LIBRARY_PATH=. ADSP_LIBRARY_PATH=. ./qnn_executor_runner --model_path esm2_8M_qnn.pte --warm_up 10 --iteration 50"
+```
+
 Off Linux x86_64, `export_esm2_qnn.py` and `export_yolo.py --backend qnn` print these instructions and exit 2.
 Other SoCs: `--soc_model SXR2230P` etc. Files for a non-default SoC get a `_{soc}` suffix. ExecuTorch 1.5.1
 also knows `SXR2330P` (V79). Check the XR's real SoC with `adb shell getprop ro.soc.model` before you trust

@@ -114,6 +114,98 @@
       }
     },
     {
+      "file": "esm2_150M_qnn.pte",
+      "kind": "esm2",
+      "model_id": "facebook/esm2_t30_150M_UR50D",
+      "size": "150M",
+      "backend": "qnn",
+      "soc_model": "SM8750",
+      "qairt_version": "2.51.0.260929",
+      "quant": "16a8w",
+      "shard": null,
+      "inputs": [
+        {
+          "name": "input_ids",
+          "shape": [
+            1,
+            256
+          ],
+          "dtype": "int32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "embedding",
+          "shape": [
+            1,
+            640
+          ],
+          "dtype": "float32"
+        },
+        {
+          "name": "contacts",
+          "shape": [
+            1,
+            254,
+            254
+          ],
+          "dtype": "float32"
+        }
+      ],
+      "seq_len": 256,
+      "vocab": "esm2_vocab.json",
+      "calibration": "calib.fasta x50",
+      "size_bytes": 165500928,
+      "sha256": "10a048c8eb740c95a0ca0eb72ee230536d858c5eb93a295f6c8682f97defec55",
+      "updated": "2026-10-18T06:17:10+00:00"
+    },
+    {
+      "file": "esm2_35M_qnn.pte",
+      "kind": "esm2",
+      "model_id": "facebook/esm2_t12_35M_UR50D",
+      "size": "35M",
+      "backend": "qnn",
+      "soc_model": "SM8750",
+      "qairt_version": "2.51.0.260929",
+      "quant": "16a8w",
+      "shard": null,
+      "inputs": [
+        {
+          "name": "input_ids",
+          "shape": [
+            1,
+            256
+          ],
+          "dtype": "int32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "embedding",
+          "shape": [
+            1,
+            480
+          ],
+          "dtype": "float32"
+        },
+        {
+          "name": "contacts",
+          "shape": [
+            1,
+            254,
+            254
+          ],
+          "dtype": "float32"
+        }
+      ],
+      "seq_len": 256,
+      "vocab": "esm2_vocab.json",
+      "calibration": "calib.fasta x50",
+      "size_bytes": 40427008,
+      "sha256": "98eebaaf7eeb51dd7aa68e642d99e3383be696c0a77a5e0ff55ba06d259aa314",
+      "updated": "2026-10-18T06:10:25+00:00"
+    },
+    {
       "file": "esm2_35M_xnnpack.pte",
       "kind": "esm2",
       "model_id": "facebook/esm2_t12_35M_UR50D",
@@ -170,6 +262,43 @@
       }
     },
     {
+      "file": "esm2_650M_qnn.pte",
+      "kind": "esm2",
+      "model_id": "facebook/esm2_t33_650M_UR50D",
+      "size": "650M",
+      "backend": "qnn",
+      "soc_model": "SM8750",
+      "qairt_version": "2.51.0.260929",
+      "quant": "16a8w",
+      "shard": null,
+      "inputs": [
+        {
+          "name": "input_ids",
+          "shape": [
+            1,
+            256
+          ],
+          "dtype": "int32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "embedding",
+          "shape": [
+            1,
+            1280
+          ],
+          "dtype": "float32"
+        }
+      ],
+      "seq_len": 256,
+      "vocab": "esm2_vocab.json",
+      "calibration": "calib.fasta x50",
+      "size_bytes": 666990080,
+      "sha256": "1fe91745875f95753cd419c07d527da0da1854cbae032d7e79a277b7711e953d",
+      "updated": "2026-10-18T06:52:20+00:00"
+    },
+    {
       "file": "esm2_650M_xnnpack.pte",
       "verify": {
         "status": "pass",
@@ -214,6 +343,52 @@
       "vocab": "esm2_vocab.json",
       "size_bytes": 367960832,
       "sha256": "8cb8abf5a7245b0212b2992b107dcedccda4766fb101cc084adbab5e721eaf07"
+    },
+    {
+      "file": "esm2_8M_qnn.pte",
+      "kind": "esm2",
+      "model_id": "facebook/esm2_t6_8M_UR50D",
+      "size": "8M",
+      "backend": "qnn",
+      "soc_model": "SM8750",
+      "qairt_version": "2.51.0.260929",
+      "quant": "16a8w",
+      "shard": null,
+      "inputs": [
+        {
+          "name": "input_ids",
+          "shape": [
+            1,
+            256
+          ],
+          "dtype": "int32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "embedding",
+          "shape": [
+            1,
+            320
+          ],
+          "dtype": "float32"
+        },
+        {
+          "name": "contacts",
+          "shape": [
+            1,
+            254,
+            254
+          ],
+          "dtype": "float32"
+        }
+      ],
+      "seq_len": 256,
+      "vocab": "esm2_vocab.json",
+      "calibration": "calib.fasta x50",
+      "size_bytes": 10396928,
+      "sha256": "623bd9073fc7bc7ac330e50edbd29d4d82e54bd098c5eaf0fbe231ec366c76b6",
+      "updated": "2026-10-18T06:05:42+00:00"
     },
     {
       "file": "esm2_8M_xnnpack.pte",

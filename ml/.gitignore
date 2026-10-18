@@ -8,3 +8,4 @@ artifacts/*.pte
 artifacts/*.bin
 *.pt
 *.etrecord
+artifacts/runtime/
