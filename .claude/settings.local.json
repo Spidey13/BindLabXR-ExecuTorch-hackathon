@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E '^python|^pip|conda|pyenv|uv$')",
+      "Read(//Users/Gary/.pyenv/**)",
+      "Read(//opt/homebrew/opt/**)",
+      "Bash(npm --version)",
+      "Bash(curl -s https://pypi.org/pypi/executorch/json)",
+      "Bash(python3 -c 'import json,sys;d=json.load\\(sys.stdin\\);print\\(sorted\\(d['\\\\''releases'\\\\''].keys\\(\\)\\)[-8:]\\); *)",
+      "Bash(cat /Users/Gary/.claude/plans/inherited-moseying-blanket.md; ls -R /Users/Gary/src/executorch-hack | head -50)",
+      "Bash(mkdir -p /Users/Gary/src/executorch-hack/server /Users/Gary/src/executorch-hack/web)",
+      "Bash(python3 -m venv .venv)",
+      "Bash(.venv/bin/pip install *)",
+      "Bash(.venv/bin/pip list *)",
+      "Bash(.venv/bin/python -c ' *)",
+      "Bash(time .venv/bin/python export_esm2_xnnpack.py --size 8M)",
+      "Bash(.venv/bin/python fetch_data.py)",
+      "Bash(.venv/bin/python export_yolo.py --imgsz 640)",
+      "Bash(.venv/bin/python export_yolo.py --imgsz 320 --no_ultralytics)",
+      "Bash(.venv/bin/python export_yolo.py --imgsz 320)",
+      "Bash(.venv/bin/python contacts.py --size 35M --pte artifacts/esm2_35M_xnnpack.pte --top_k 8 --target AQVINTFDGVADYLQTYHKLPDNYITKSEAQALGWVASKGNLADVAPGKSIGGDIFSNREGKLPGKSGRTWREADINYTSGFRNSDRILYSSDWLIYKTTDHYQTFTKIR --binder KKAVINGEQIRSISDLHQTLKKELALPEYYGENLDALWDALTGWVEYPLVLEWRQFEQSKQLTENGAESVLQVFREAKAEGADITIILS)",
+      "Bash(.venv/bin/python -)",
+      "Bash(python3 -c \"import json,sys;d=json.load\\(sys.stdin\\);print\\(d['target_residues'],d['binder_residues'],[p['prob'] for p in d['pairs']]\\)\")",
+      "Bash(.venv/bin/python export_esm2_qnn.py --size 8M)",
+      "Bash(echo \"exit=$?\")",
+      "Bash(.venv/bin/python export_esm2_qnn.py --size 8M --cpu_check)",
+      "Bash(.venv/bin/python export_esm2_qnn.py --size 35M --num_shards 3 --cpu_check)"
+    ]
+  }
+}

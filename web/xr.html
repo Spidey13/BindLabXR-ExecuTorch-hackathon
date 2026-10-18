@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BindLab XR Viewer</title>
+    <style>
+      :root { color-scheme: dark; --page: #0d0d0d; --text: #f0efec; --muted: #898781; }
+      body { margin: 0; background: var(--page); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+      #info { position: fixed; top: 16px; left: 16px; right: 16px; font-size: 14px; pointer-events: none; }
+      #info b { font-size: 18px; }
+      #info span { color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <div id="info"><b>BindLab XR</b><br /><span id="status">Loading complex…</span></div>
+    <script type="module" src="/src/xr.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+node_modules/
+web/dist/
+server/db.sqlite
+server/outbox/
+server/snapshots/
+server/reports/
+*.pte
+.DS_Store

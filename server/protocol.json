@@ -1,0 +1,17 @@
+{
+  "name": "Binder validation assay (demo)",
+  "steps": [
+    {"id": "s1", "title": "Operator at bench", "required": ["person"], "forbidden": []},
+    {"id": "s2", "title": "Pick up reagent", "required": ["bottle"], "forbidden": ["scissors"]},
+    {"id": "s3", "title": "Prepare beaker", "required": ["cup"], "forbidden": ["scissors"]},
+    {"id": "s4", "title": "Record in lab notebook", "required": ["book"], "forbidden": []}
+  ],
+  "coco_to_lab": {
+    "bottle": "reagent",
+    "cup": "beaker",
+    "scissors": "tool",
+    "cell phone": "scanner",
+    "book": "notebook",
+    "person": "operator"
+  }
+}
