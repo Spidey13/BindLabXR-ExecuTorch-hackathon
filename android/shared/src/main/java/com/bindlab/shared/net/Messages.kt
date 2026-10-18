@@ -15,7 +15,19 @@ data class Detection(val label: String, val conf: Float, val box: FloatArray) {
 
 fun List<Detection>.toJson() = JSONArray().apply { forEach { put(it.toJson()) } }
 
-data class ProtocolStep(val id: String, val title: String, val required: List<String>, val forbidden: List<String>)
+/** One troubleshooting hint attached to a protocol step. */
+data class Troubleshoot(val symptom: String, val cause: String, val fix: String)
+
+data class ProtocolStep(
+    val id: String,
+    val title: String,
+    val required: List<String>,
+    val forbidden: List<String>,
+    val instruction: String = "",
+    val timerS: Int? = null,
+    val critical: Boolean = false,
+    val troubleshoot: List<Troubleshoot> = emptyList(),
+)
 
 sealed interface ServerMessage {
     data class State(val runId: String, val state: String, val stepIndex: Int?) : ServerMessage
@@ -43,7 +55,15 @@ sealed interface ServerMessage {
             ProtocolStep(
                 s.optString("id"), s.optString("title"),
                 s.optJSONArray("required").toStringList(), s.optJSONArray("forbidden").toStringList(),
+                instruction = s.optString("instruction", ""),
+                timerS = if (s.has("timer_s") && !s.isNull("timer_s")) s.optInt("timer_s").takeIf { it > 0 } else null,
+                critical = s.optBoolean("critical", false),
+                troubleshoot = parseTroubleshoot(s.optJSONArray("troubleshoot")),
             )
+        }
+
+        private fun parseTroubleshoot(arr: JSONArray?): List<Troubleshoot> = (0 until (arr?.length() ?: 0)).mapNotNull { i ->
+            arr!!.optJSONObject(i)?.let { Troubleshoot(it.optString("symptom"), it.optString("cause"), it.optString("fix")) }
         }
     }
 }

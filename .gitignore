@@ -8,3 +8,5 @@ server/snapshots/
 server/reports/
 *.pte
 .DS_Store
+
+server/custody.sqlite*

@@ -2,6 +2,8 @@
 
 Usage: .venv/bin/python simulate.py [http://localhost:8000] [--delay 1.5]
 Use --delay to watch it play out on the web app.
+To test against a throwaway database, start the server with BINDLAB_DB / BINDLAB_CUSTODY_DB set
+to temporary paths (see main.py).
 """
 import argparse
 import asyncio
@@ -53,16 +55,32 @@ async def main(base: str, delay: float) -> None:
             "target_seq": TARGET, "binder_seq": BINDER, "model": "650M", "backend": "qnn",
             "score": 0.87, "target_residues": [27, 59, 73, 83, 87, 102],
             "binder_residues": [29, 35, 38, 39, 76], "latency_ms": 236,
-            "structure": "/structures/demo_complex.pdb",
+            "structure_ref": "demo_complex",
         })
         r.raise_for_status()
         run_id = r.json()["run_id"]
         print("run", run_id, r.json()["state"])
+        detail = (await c.get(f"/runs/{run_id}")).json()
+        assert detail["data"]["structure"] == "/structures/demo_complex.pdb", detail["data"]
+        await pause()
+
+        # XR viewer commits a docked pose (idempotent on client_event_id; state unchanged).
+        commit = {"run_id": run_id, "pose": {"position": [0.1, 1.2, -0.5],
+                                             "quaternion": [0, 0, 0, 1]},
+                  "geometry_score": 0.73, "client_event_id": f"{run_id}-commit-1"}
+        first = (await c.post("/commit", json=commit)).json()
+        again = (await c.post("/commit", json=commit)).json()
+        assert first.get("ok") and not first.get("duplicate"), first
+        assert again.get("duplicate") is True and again["hash"] == first["hash"], again
+        while json.loads(await xr.recv())["type"] != "commit":
+            pass
+        print("commit", first["state"], first["hash"][:12], "duplicate ->", again["duplicate"])
         await pause()
 
         print("handoff", (await c.post(f"/lab/handoff/{run_id}")).json())
         await pause()
         steps = (await c.post(f"/lab/enter/{run_id}")).json()["steps"]
+        assert (await c.get(f"/runs/{run_id}")).json()["protocol"].get("disclaimer")
 
         # The headset should have received the protocol over WS.
         while True:
@@ -82,12 +100,22 @@ async def main(base: str, delay: float) -> None:
                     "snapshot_b64": tiny_jpeg("#c33")})
                 r.raise_for_status()
                 await pause()
-            r = await c.post("/lab/step", json={"run_id": run_id, "step_id": step["id"],
-                                                "status": "passed", "detections": dets,
-                                                "snapshot_b64": tiny_jpeg()})
+            report = {"run_id": run_id, "step_id": step["id"], "status": "passed",
+                      "detections": dets, "snapshot_b64": tiny_jpeg(),
+                      "client_event_id": f"{run_id}-{step['id']}-passed"}
+            r = await c.post("/lab/step", json=report)
+            r.raise_for_status()
+            dup = (await c.post("/lab/step", json=report)).json()  # retry must not re-journal
+            assert dup.get("duplicate") is True and dup["occurrence_id"] == r.json()["occurrence_id"]
+            r = await c.post(f"/lab/review/{run_id}", json={
+                "step_id": step["id"], "reviewer": "Dr. Demo", "accepted": True,
+                "note": "Simulated local review; photo-backed report present."})
             r.raise_for_status()
             print("step", step["id"], r.json()["state"])
             await pause()
+
+        # Commits are rejected once the run is in the lab protocol.
+        assert (await c.post("/commit", json={**commit, "client_event_id": None})).status_code == 409
 
         print("approve", (await c.post(f"/approve/{run_id}", json={"approver": "Dr. Demo"})).json())
         while json.loads(await xr.recv())["type"] != "beam":
@@ -104,6 +132,7 @@ async def main(base: str, delay: float) -> None:
             assert r.status_code == 200 and r.content[:4] == b"%PDF", url
         final = (await c.get(f"/runs/{run_id}")).json()
         assert final["state"] == "PATENT_DRAFT" and final["chain_ok"], final["state"]
+        assert any(e["kind"] == "commit" for e in final["events"]), "commit missing from events"
         print("OK", run_id, final["state"], f"{len(final['events'])} events, chain verified")
 
 

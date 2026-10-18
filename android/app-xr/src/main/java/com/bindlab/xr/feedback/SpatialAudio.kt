@@ -29,6 +29,10 @@ class SpatialAudio(context: Context) {
             "success" to tone(listOf(880.0 to 0.12, 1320.0 to 0.18), square = false),
             "anomaly" to tone(listOf(220.0 to 0.18, 180.0 to 0.18, 220.0 to 0.18), square = true),
             "tick" to tone(listOf(1600.0 to 0.04), square = false),
+            // Timer reached zero: three rising soft tones.
+            "chime" to tone(listOf(660.0 to 0.14, 880.0 to 0.14, 1100.0 to 0.22), square = false),
+            // Hold / red strip: a single low cue, less harsh than "anomaly".
+            "low" to tone(listOf(160.0 to 0.30), square = false),
         ).mapValues { (name, pcm) ->
             val f = File(dir, "$name.wav").apply { writeBytes(wav(pcm)) }
             pool.load(f.absolutePath, 1)

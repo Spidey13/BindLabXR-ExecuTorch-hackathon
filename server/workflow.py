@@ -5,7 +5,7 @@ from pathlib import Path
 
 BINDING_THRESHOLD = 0.5
 
-PROTOCOL = json.loads((Path(__file__).parent / "protocol.json").read_text())
+PROTOCOL = json.loads((Path(__file__).parent / "protocol.json").read_text(encoding="utf-8"))
 
 ORDER = ["BINDING", "BIND_OK", "SENT_TO_LAB", "LAB_ENTERED", "STEP", "APPROVAL",
          "BEAMED", "EVIDENCE", "PATENT_DRAFT"]

@@ -25,17 +25,13 @@ class ExecuTorchModule(private val context: Context) : InferenceEngine {
             throw ModelLoadException("Module.load failed: ${e.message ?: e.javaClass.simpleName}", e)
         }
         // Module.load is lazy; force program + method init so load_ms is real and failures surface here.
-        val rc = try {
+        try {
             m.loadMethod("forward")
         } catch (e: OutOfMemoryError) {
             m.destroy(); throw e
         } catch (e: Throwable) {
             m.destroy()
             throw ModelLoadException("loadMethod(forward) threw: ${e.message ?: e.javaClass.simpleName}", e)
-        }
-        if (rc != 0) {
-            m.destroy()
-            throw ModelLoadException("loadMethod(forward) failed: error 0x${rc.toString(16)}")
         }
         module = m
         return (SystemClock.elapsedRealtimeNanos() - t0) / 1_000_000

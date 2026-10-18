@@ -55,6 +55,14 @@ class StepGate(val conf: Float = 0.5f, val passFrames: Int = 8, val forbiddenFra
     val isPassed @Synchronized get() = passed
     val isAnomaly @Synchronized get() = anomalyActive
 
+    /** Operator explicitly advanced (voice "next" / button): stop evaluating this step so it cannot fire Passed again. */
+    @Synchronized
+    fun markPassed() { passed = true; anomalyActive = false }
+
+    /** Clear a held anomaly (operator "Continue anyway") without resetting the required-label progress. */
+    @Synchronized
+    fun clearAnomaly() { anomalyActive = false; forbiddenCount.clear() }
+
     @Synchronized
     fun onFrame(dets: List<Detection>): Event? {
         val step = current ?: return null

@@ -10,6 +10,6 @@ plugins {
 val executorchAar: File? = listOf(file("libs/executorch.aar"), file("../libs/executorch.aar"))
     .firstOrNull { it.exists() }
 extra["executorchAar"] = executorchAar
-extra["executorchMaven"] = "org.pytorch:executorch-android:1.0.0"
+extra["executorchMaven"] = "org.pytorch:executorch-android:1.5.1"
 if (executorchAar != null) logger.lifecycle("ExecuTorch: using local AAR $executorchAar")
 else logger.lifecycle("ExecuTorch: libs/executorch.aar not found, using Maven ${extra["executorchMaven"]}")

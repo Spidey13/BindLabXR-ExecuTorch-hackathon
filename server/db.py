@@ -1,11 +1,13 @@
 """SQLite storage: runs, bench results, and a hash-chained event log."""
 import hashlib
 import json
+import os
 import sqlite3
 import time
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent / "db.sqlite"
+# BINDLAB_DB overrides the location (used by simulate.py --fresh-db and tests).
+DB_PATH = Path(os.environ.get("BINDLAB_DB") or Path(__file__).parent / "db.sqlite")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
@@ -31,6 +33,14 @@ CREATE TABLE IF NOT EXISTS events (
   payload TEXT,
   prev_hash TEXT,
   hash TEXT
+);
+CREATE TABLE IF NOT EXISTS idempotency (
+  run_id TEXT,
+  client_event_id TEXT,
+  endpoint TEXT,
+  created REAL,
+  result TEXT,
+  PRIMARY KEY (run_id, client_event_id)
 );
 """
 
@@ -124,6 +134,24 @@ def list_events(run_id: str) -> list[dict]:
         "SELECT * FROM events WHERE run_id = ? ORDER BY id", (run_id,)
     ).fetchall()
     return [{**dict(r), "payload": json.loads(r["payload"])} for r in rows]
+
+
+def get_idempotent(run_id: str, client_event_id: str) -> dict | None:
+    """Previously returned result for (run_id, client_event_id), or None."""
+    row = _conn.execute(
+        "SELECT result FROM idempotency WHERE run_id = ? AND client_event_id = ?",
+        (run_id, client_event_id),
+    ).fetchone()
+    return json.loads(row["result"]) if row else None
+
+
+def put_idempotent(run_id: str, client_event_id: str, endpoint: str, result: dict) -> None:
+    _conn.execute(
+        "INSERT OR IGNORE INTO idempotency (run_id, client_event_id, endpoint, created, result) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (run_id, client_event_id, endpoint, time.time(), json.dumps(result)),
+    )
+    _conn.commit()
 
 
 def verify_chain(run_id: str) -> bool:

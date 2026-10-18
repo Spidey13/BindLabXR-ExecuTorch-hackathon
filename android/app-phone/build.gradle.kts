@@ -8,11 +8,12 @@ android {
     namespace = "com.bindlab.phone"
     compileSdk = 35
     defaultConfig {
-        applicationId = "com.bindlab.phone"
+        applicationId = "com.bindlab.phone.custody"
         minSdk = 30
         targetSdk = 35
         versionCode = 1
         versionName = "0.1"
+        testInstrumentationRunner = "com.bindlab.phone.EmbeddingVerification"
         ndk { abiFilters += "arm64-v8a" }
     }
     // Keep .so files extracted in nativeLibraryDir: QNN skel libs + ADSP_LIBRARY_PATH need real files.

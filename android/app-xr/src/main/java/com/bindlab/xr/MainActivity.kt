@@ -2,44 +2,42 @@ package com.bindlab.xr
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.graphics.Paint
 import android.os.Bundle
-import android.util.Size
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageAnalysis
-import androidx.camera.core.Preview
-import androidx.camera.core.resolutionselector.AspectRatioStrategy
-import androidx.camera.core.resolutionselector.ResolutionSelector
-import androidx.camera.core.resolutionselector.ResolutionStrategy
-import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.PreviewView
-import androidx.compose.foundation.Canvas
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.Typography
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,39 +45,219 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size as GSize
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.bindlab.shared.ui.SettingsScreen
-import com.bindlab.xr.camera.FrameAnalyzer
+import com.bindlab.xr.camera.HeadlessCamera
+import com.bindlab.xr.ui.CompletionCard
+import com.bindlab.xr.ui.DetectionOverlay
+import com.bindlab.xr.ui.GearButton
+import com.bindlab.xr.ui.Hud
+import com.bindlab.xr.ui.Pill
+import com.bindlab.xr.ui.StatusBar
+import com.bindlab.xr.ui.StepCard
+import com.bindlab.xr.ui.TroubleshootPanel
+import com.bindlab.xr.ui.VoiceBadgeView
+import com.bindlab.xr.ui.WarningStrip
 import com.bindlab.xr.yolo.YoloDetector
-import java.util.concurrent.Executors
 
 class MainActivity : ComponentActivity() {
     private val vm: XrViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
-                var settings by remember { mutableStateOf(false) }
-                if (settings) {
-                    Column(Modifier.fillMaxSize().background(Color.White)) {
-                        OutlinedButton(onClick = { settings = false }, modifier = Modifier.padding(16.dp)) { Text("← Back") }
-                        SettingsScreen(vm.config, vm.modelDir, vm::onServerChanged, Modifier.fillMaxSize()) { EngineChooser(vm) }
-                    }
-                } else LabScreen(vm, onSettings = { settings = true })
+            MaterialTheme(colorScheme = XrColors, typography = XrTypography) {
+                LabScreen(vm)
             }
         }
+    }
+}
+
+private val XrColors = darkColorScheme(
+    primary = Hud.Teal,
+    onPrimary = Hud.Ink,
+    secondary = Hud.Amber,
+    error = Hud.Red,
+    background = Color.Transparent,
+    surface = Color(0xFF14181C),
+    onSurface = Color.White,
+    onBackground = Color.White,
+)
+
+private val XrTypography = Typography(
+    bodyLarge = TextStyle(fontSize = 18.sp),
+    bodyMedium = TextStyle(fontSize = 16.sp),
+    bodySmall = TextStyle(fontSize = 16.sp),
+    labelLarge = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium),
+    labelMedium = TextStyle(fontSize = 16.sp),
+    labelSmall = TextStyle(fontSize = 16.sp),
+    titleLarge = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.Bold),
+    titleMedium = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.SemiBold),
+)
+
+@Composable
+private fun LabScreen(vm: XrViewModel) {
+    val context = LocalContext.current
+    val owner = LocalLifecycleOwner.current
+    fun has(p: String) = ContextCompat.checkSelfPermission(context, p) == PackageManager.PERMISSION_GRANTED
+    var cameraGranted by remember { mutableStateOf(has(Manifest.permission.CAMERA)) }
+    var micGranted by remember { mutableStateOf(has(Manifest.permission.RECORD_AUDIO)) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
+        cameraGranted = r[Manifest.permission.CAMERA] ?: cameraGranted
+        micGranted = r[Manifest.permission.RECORD_AUDIO] ?: micGranted
+    }
+    LaunchedEffect(Unit) {
+        if (!cameraGranted || !micGranted) launcher.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
+    }
+    LaunchedEffect(micGranted) { vm.onMicPermission(micGranted) }
+
+    // Camera image is shown on screen (FIT_CENTER) so the detection boxes line up with what YOLO saw.
+    val previewView = remember { PreviewView(context).apply { scaleType = PreviewView.ScaleType.FIT_CENTER } }
+    DisposableEffect(cameraGranted, owner) {
+        val cam = if (cameraGranted) HeadlessCamera(context, vm::onFrame) { vm.modelStatus.value = it }.also { it.start(owner, previewView) } else null
+        onDispose { cam?.stop() }
+    }
+
+    val step by vm.currentStep.collectAsState()
+    val steps by vm.steps.collectAsState()
+    val index by vm.stepIndex.collectAsState()
+    val seen by vm.seenLabels.collectAsState()
+    val timer by vm.timerRemaining.collectAsState()
+    val warning by vm.warning.collectAsState()
+    val hold by vm.holdActive.collectAsState()
+    val awaiting by vm.awaitingReview.collectAsState()
+    val troubleshoot by vm.troubleshootOpen.collectAsState()
+    val complete by vm.complete.collectAsState()
+    val deviations by vm.deviationCount.collectAsState()
+    val badge by vm.voiceBadge.collectAsState()
+    val dets by vm.detections.collectAsState()
+    val frame by vm.frameSize.collectAsState()
+    val showDets by vm.showDetections.collectAsState()
+    val connected by vm.ws.connected.collectAsState()
+    val status by vm.modelStatus.collectAsState()
+    val ms by vm.inferMs.collectAsState()
+    val dev by vm.devMode.collectAsState()
+    var settings by remember { mutableStateOf(false) }
+
+    Box(Modifier.fillMaxSize().background(Color.Transparent)) {
+        // Camera box has the frame's aspect ratio, so the image fills it with no bars.
+        val aspect = frame.first.toFloat() / frame.second.coerceAtLeast(1)
+        Box(Modifier.fillMaxHeight().aspectRatio(aspect).align(Alignment.CenterStart).clip(RoundedCornerShape(20.dp)).background(Color.Black)) {
+            AndroidView({ previewView }, Modifier.fillMaxSize())
+            if (showDets) DetectionOverlay(dets, step, frame)
+            StatusBar(status, ms, connected, dets.size, Modifier.align(Alignment.TopStart).padding(16.dp))
+            Row(Modifier.align(Alignment.BottomStart).padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                when {
+                    steps.isEmpty() -> Pill("▶ Start protocol", Hud.Teal, Hud.Ink, onClick = vm::startProtocol)
+                    complete -> Pill("↺ Restart protocol", Hud.Teal, Hud.Ink, onClick = vm::startProtocol)
+                    dev -> Pill("Skip step ▶ (dev)", Hud.Amber, Hud.Ink, onClick = vm::requestAdvance)
+                    else -> Pill(if (awaiting) "Waiting for review…" else "Next step ▶", if (awaiting) Hud.GreyFill else Hud.TealFill, if (awaiting) Hud.Grey else Hud.Teal, onClick = vm::requestAdvance)
+                }
+                if (!cameraGranted) Pill("Allow camera & microphone", Hud.Amber, Hud.Ink) {
+                    launcher.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
+                }
+            }
+        }
+
+        // HUD cards float top-right over the transparent window.
+        Column(
+            Modifier.align(Alignment.TopEnd).fillMaxHeight().padding(end = 24.dp, top = 24.dp, bottom = 80.dp).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            if (complete) {
+                CompletionCard(deviations, chainOk = connected)
+            } else {
+                StepCard(step, index, steps.size, seen, timer, red = warning is Warning.Red, awaitingReview = awaiting, labName = vm::lab)
+                WarningStrip(warning, hold, onRedo = vm::redo, onContinue = vm::continueAnyway, onWhatsWrong = { vm.openTroubleshoot(true) })
+                AnimatedVisibility(troubleshoot && step != null, enter = fadeIn(), exit = fadeOut()) {
+                    TroubleshootPanel(step?.troubleshoot.orEmpty(), onApply = vm::applyFix, onClose = { vm.openTroubleshoot(false) })
+                }
+            }
+        }
+
+        VoiceBadgeView(badge, Modifier.align(Alignment.BottomEnd).padding(start = 24.dp, end = 24.dp, bottom = 80.dp))
+        GearButton({ settings = !settings }, Modifier.align(Alignment.BottomEnd).padding(16.dp))
+
+        AnimatedVisibility(settings, enter = fadeIn(), exit = fadeOut(), modifier = Modifier.align(Alignment.Center)) {
+            SettingsPanel(vm, onClose = { settings = false })
+        }
+    }
+}
+
+@Composable
+private fun SettingsPanel(vm: XrViewModel, onClose: () -> Unit) {
+    val status by vm.modelStatus.collectAsState()
+    val connected by vm.ws.connected.collectAsState()
+    val runId by vm.runId.collectAsState()
+    val runState by vm.runState.collectAsState()
+    val log by vm.log.collectAsState()
+    val ms by vm.inferMs.collectAsState()
+    val dets by vm.detections.collectAsState()
+    val showDets by vm.showDetections.collectAsState()
+    val dev by vm.devMode.collectAsState()
+    val mic by vm.micEnabled.collectAsState()
+    val voiceStatus by vm.voiceStatus.collectAsState()
+    val notes by vm.notes.collectAsState()
+    val deviations by vm.deviationCount.collectAsState()
+    var server by remember { mutableStateOf(false) }
+
+    Column(
+        Modifier.width(720.dp).fillMaxHeight(0.9f).clip(RoundedCornerShape(20.dp)).background(Hud.Panel)
+            .border(1.dp, Hud.Border, RoundedCornerShape(20.dp)).padding(20.dp).verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(Modifier.size(10.dp).clip(CircleShape).background(if (connected) Hud.Teal else Hud.Red))
+            Text(if (connected) "server connected" else "server offline · ${vm.config.server}", color = Hud.Body, fontSize = 16.sp, modifier = Modifier.weight(1f))
+            Pill("Close", Hud.GreyFill, Color.White, onClick = onClose)
+        }
+        if (server) {
+            Pill("← Back", Hud.GreyFill, Color.White) { server = false }
+            SettingsScreen(vm.config, vm.modelDir, vm::onServerChanged, Modifier.fillMaxWidth(), extra = { EngineChooser(vm) })
+            return@Column
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Pill("Sync", Hud.GreyFill, Color.White, Modifier.weight(1f), vm::sync)
+            Pill("Demo steps", Hud.GreyFill, Color.White, Modifier.weight(1f), vm::loadDemoProtocol)
+            Pill("Server…", Hud.GreyFill, Color.White, Modifier.weight(1f)) { server = true }
+        }
+        Pill("Open molecule viewer", Hud.TealFill, Hud.Teal, Modifier.fillMaxWidth()) { vm.openMoleculeViewer(runId ?: "") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Pill("Sim pass", Hud.TealFill, Hud.Teal, Modifier.weight(1f)) { vm.simulate(true) }
+            Pill("Sim anomaly", Color(0x33EF4444), Hud.Red, Modifier.weight(1f)) { vm.simulate(false) }
+            Pill("Next step", Hud.GreyFill, Color.White, Modifier.weight(1f), vm::requestAdvance)
+        }
+        ToggleRow("Show detections", showDets, vm::setShowDetections)
+        ToggleRow("Developer mode (skip gates, holds, review)", dev, vm::setDevMode)
+        ToggleRow("Microphone (voice commands)", mic, vm::setMicEnabled)
+        Text("voice: $voiceStatus", color = Hud.Grey, fontSize = 16.sp)
+        Text("run ${runId ?: "-"} ${runState ?: ""} · deviations $deviations", color = Hud.Body, fontSize = 16.sp)
+        Text(status, color = if (status.startsWith("model missing") || status.contains("failed")) Color(0xFFFFB4AB) else Hud.Grey, fontSize = 16.sp)
+        Text("Detections" + (ms?.let { " · %.0f ms".format(it) } ?: "") + ": " + (if (dets.isEmpty()) "none" else dets.take(6).joinToString { "${it.label} %.2f".format(it.conf) }), color = Hud.Body, fontSize = 16.sp)
+        if (log.isNotEmpty()) Text(log, color = Hud.Grey, fontSize = 16.sp)
+        if (notes.isNotEmpty()) {
+            Text("Notes", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            notes.takeLast(8).forEach { Text("· $it", color = Hud.Body, fontSize = 16.sp) }
+        }
+    }
+}
+
+@Composable
+private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Text(label, color = Color.White, fontSize = 18.sp, modifier = Modifier.weight(1f))
+        Switch(checked, onChange)
     }
 }
 
@@ -95,150 +273,4 @@ private fun EngineChooser(vm: XrViewModel) {
         "AAR tries yolo11n_qnn.pte then yolo11n_xnnpack.pte. Runner execs jniLibs/libqnn_executor_runner.so per frame (slow fallback).",
         style = MaterialTheme.typography.bodySmall,
     )
-}
-
-@Composable
-private fun LabScreen(vm: XrViewModel, onSettings: () -> Unit) {
-    val context = LocalContext.current
-    var granted by remember {
-        mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
-    }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it }
-    Row(Modifier.fillMaxSize().background(Color(0xFF101418)).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(Modifier.weight(1.5f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-            if (granted) {
-                CameraWithOverlay(vm)
-            } else Button(onClick = { launcher.launch(Manifest.permission.CAMERA) }) { Text("Allow camera") }
-        }
-        Panel(vm, onSettings, Modifier.weight(1f).fillMaxHeight())
-    }
-}
-
-@Composable
-private fun CameraWithOverlay(vm: XrViewModel) {
-    val context = LocalContext.current
-    val owner = LocalLifecycleOwner.current
-    val previewView = remember { PreviewView(context).apply { scaleType = PreviewView.ScaleType.FIT_CENTER } }
-    DisposableEffect(owner) {
-        val executor = Executors.newSingleThreadExecutor()
-        val future = ProcessCameraProvider.getInstance(context)
-        future.addListener({
-            val provider = future.get()
-            val res = ResolutionSelector.Builder()
-                .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
-                .setResolutionStrategy(ResolutionStrategy(Size(640, 480), ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER))
-                .build()
-            val preview = Preview.Builder().setResolutionSelector(
-                ResolutionSelector.Builder().setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY).build(),
-            ).build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
-            val analysis = ImageAnalysis.Builder()
-                .setResolutionSelector(res)
-                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .build().also { it.setAnalyzer(executor, FrameAnalyzer(vm::onFrame)) }
-            // Galaxy XR may expose its world-facing camera without a "back" lens facing.
-            val selector = when {
-                provider.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA) -> CameraSelector.DEFAULT_BACK_CAMERA
-                provider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA) -> CameraSelector.DEFAULT_FRONT_CAMERA
-                else -> provider.availableCameraInfos.firstOrNull()?.cameraSelector
-            }
-            if (selector == null) {
-                vm.modelStatus.value = "no camera available"
-            } else {
-                provider.unbindAll()
-                runCatching { provider.bindToLifecycle(owner, selector, preview, analysis) }
-                    .onFailure { vm.modelStatus.value = "camera bind failed: ${it.message}" }
-            }
-        }, ContextCompat.getMainExecutor(context))
-        onDispose {
-            runCatching { future.get().unbindAll() }
-            executor.shutdown()
-        }
-    }
-    val dets by vm.detections.collectAsState()
-    val frame by vm.frameSize.collectAsState()
-    val step = vm.steps.collectAsState().value.getOrNull(vm.stepIndex.collectAsState().value)
-    Box(Modifier.fillMaxSize()) {
-        AndroidView({ previewView }, Modifier.fillMaxSize())
-        Canvas(Modifier.fillMaxSize()) {
-            // Same 4:3 stream + FIT_CENTER: map normalised boxes into the fitted rectangle.
-            val (fw, fh) = frame
-            val s = minOf(size.width / fw, size.height / fh)
-            val dw = fw * s; val dh = fh * s
-            val ox = (size.width - dw) / 2; val oy = (size.height - dh) / 2
-            val text = Paint().apply { textSize = 28f; isAntiAlias = true }
-            for (d in dets) {
-                val color = when {
-                    step != null && d.label in step.forbidden -> Color(0xFFFF4D4D)
-                    step != null && d.label in step.required -> Color(0xFF3DDC84)
-                    else -> Color(0xFFFFC107)
-                }
-                val tl = Offset(ox + d.box[0] * dw, oy + d.box[1] * dh)
-                drawRect(color, tl, GSize(d.box[2] * dw, d.box[3] * dh), style = Stroke(4f))
-                text.color = color.toArgb()
-                drawContext.canvas.nativeCanvas.drawText("${d.label} ${"%.2f".format(d.conf)}", tl.x + 6, tl.y + 30, text)
-            }
-        }
-    }
-}
-
-@Composable
-private fun Panel(vm: XrViewModel, onSettings: () -> Unit, modifier: Modifier) {
-    val card by vm.card.collectAsState()
-    val steps by vm.steps.collectAsState()
-    val index by vm.stepIndex.collectAsState()
-    val progress by vm.progress.collectAsState()
-    val dets by vm.detections.collectAsState()
-    val ms by vm.inferMs.collectAsState()
-    val status by vm.modelStatus.collectAsState()
-    val connected by vm.ws.connected.collectAsState()
-    val runId by vm.runId.collectAsState()
-    val runState by vm.runState.collectAsState()
-    val log by vm.log.collectAsState()
-    val light = Color(0xFFE8EAED)
-
-    Column(modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        val bg = when (card.color) {
-            CardColor.GREEN -> Color(0xFF1E7D3A)
-            CardColor.RED -> Color(0xFFB3261E)
-            CardColor.DONE -> Color(0xFF3949AB)
-            CardColor.NEUTRAL -> Color(0xFF2B3138)
-        }
-        Card(colors = CardDefaults.cardColors(containerColor = bg), shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp)) {
-                Text(card.title, color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(card.detail, color = Color.White)
-                steps.getOrNull(index)?.let { s ->
-                    if (s.required.isNotEmpty()) {
-                        Text(
-                            s.required.joinToString("   ") { "${vm.lab(it)} ${minOf(progress[it] ?: 0, vm.gate.passFrames)}/${vm.gate.passFrames}" },
-                            color = Color.White, style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
-            }
-        }
-        steps.forEachIndexed { i, s ->
-            val mark = when { i < index -> "✓"; i == index -> "▶"; else -> "·" }
-            Text("$mark ${s.title}", color = if (i == index) Color.White else Color.Gray)
-        }
-        Text("Detections" + (ms?.let { " · %.0f ms".format(it) } ?: ""), color = light, fontWeight = FontWeight.Bold)
-        Text(if (dets.isEmpty()) "none" else dets.take(6).joinToString("\n") { "${it.label} %.2f".format(it.conf) }, color = light)
-        Text(status, color = if (status.startsWith("model missing") || status.contains("failed")) Color(0xFFFFB4AB) else Color.Gray,
-            style = MaterialTheme.typography.bodySmall)
-        Text(
-            (if (connected) "● server connected" else "○ server offline (${vm.config.server})") +
-                "\nrun ${runId ?: "-"} ${runState ?: ""}" + (if (log.isNotEmpty()) "\n$log" else ""),
-            color = Color.Gray, style = MaterialTheme.typography.bodySmall,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedButton(onClick = vm::sync) { Text("Sync", color = light) }
-            OutlinedButton(onClick = vm::loadDemoProtocol) { Text("Demo steps", color = light) }
-            OutlinedButton(onClick = onSettings) { Text("Settings", color = light) }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedButton(onClick = { vm.simulate(true) }) { Text("Sim pass", color = light) }
-            OutlinedButton(onClick = { vm.simulate(false) }) { Text("Sim anomaly", color = light) }
-        }
-    }
 }

@@ -12,7 +12,7 @@ import java.io.Closeable
 
 object EsmModels {
     val SIZES = listOf("8M", "35M", "150M", "650M", "3B")
-    val BACKENDS = listOf("qnn", "xnnpack")
+    val BACKENDS = listOf("portable-cpu", "xnnpack", "qnn")
     fun base(size: String, backend: String) = "esm2_${size}_$backend"
     fun modelName(size: String) = "esm2_$size"
 }
@@ -53,20 +53,21 @@ class EsmEmbedder(private val context: Context, val size: String, val backend: S
         val files = ModelStore.find(context, EsmModels.base(size, backend))
             ?: throw ModelLoadException("model missing: ${EsmModels.base(size, backend)}.pte")
         val (e, path) = ModelStore.engineFor(files) { ExecuTorchModule(context) }
-        val adapted = TokenDtypeAdapter(e)
+        val adapted = if (backend == "qnn") TokenDtypeAdapter(e) else e
         loadMs = adapted.load(path)
         engine = adapted
         return this
     }
 
     fun embed(seq: String): Result {
+        require(EsmTokenizer.clean(seq).length <= EsmTokenizer.MAX_RESIDUES) { "Maximum sequence length is 254 residues" }
         val e = engine ?: throw IllegalStateException("not open")
         val t0 = SystemClock.elapsedRealtimeNanos()
         val outs = e.run(tokenInputs(seq))
         val ms = (SystemClock.elapsedRealtimeNanos() - t0) / 1e6
-        // Embedding: the [1, D] output (or the smallest one if shapes are unknown).
-        val emb = outs.firstOrNull { it.rank == 2 && it.shape[0] == 1L }
-            ?: outs.minByOrNull { it.data.size } ?: throw IllegalStateException("model returned no tensors")
+        val dim = when (size) { "8M" -> 320L; "35M" -> 480L; "150M" -> 640L; "650M" -> 1280L; "3B" -> 2560L; else -> 0L }
+        val emb = outs.firstOrNull { it.rank == 2 && it.shape.contentEquals(longArrayOf(1, dim)) }
+            ?: throw IllegalStateException("Model output is not the expected [1, $dim] sequence embedding")
         val contacts = outs.firstOrNull { it !== emb && it.rank == 3 && it.shape[1] == it.shape[2] }
         return Result(emb.data, contacts, ms)
     }

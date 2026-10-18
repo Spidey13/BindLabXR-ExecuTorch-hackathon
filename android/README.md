@@ -1,5 +1,30 @@
 # BindLab XR — Android
 
+## Phone to headset viewer (Windows USB demo)
+
+After computation, **Open in XR** saves the result once and calls
+`POST /runs/{id}/open-xr` on every tap, including retries. It opens the physics
+viewer in `protein-xr-integration/viewer`, with that run's ID and hub address.
+Tap **Enter XR** in Chrome to start the immersive session.
+
+For the USB-connected Windows setup, start the hub with `server/run.ps1 -XrUsb`
+(or set `BINDLAB_XR_USB=1` before starting uvicorn). This explicitly enables the
+local ADB launcher: it reads the registered `xr` target from ignored
+`config/devices.local.json`, verifies SXR2230P, restores ports 8000/8080, then
+opens Chrome. Keep the headset connected by USB and the viewer server running
+on port 8080. No device IDs are stored in source. Without USB mode, the hub
+requires the headset BindLab receiver to be connected and sends it a launch
+event; Android background-launch restrictions may apply.
+
+The phone's **Sent** status means the launch request succeeded, not that an
+immersive session or hand interaction has been verified. Disconnected-device
+and launch errors are shown on the phone rather than reported as live in XR.
+
+For this isolated S25 installation, follow [S25-MODEL.md](../S25-MODEL.md).
+It uses **BindLab Custody** (`com.bindlab.phone.custody`), ExecuTorch **1.5.1**,
+and the verified **portable-cpu** embedding export. The historical upstream
+instructions below describe the original apps and are not the S25 setup recipe.
+
 One Gradle project, three modules:
 
 | module | what |
